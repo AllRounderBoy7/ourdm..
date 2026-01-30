@@ -67,6 +67,7 @@ export interface Chat {
   isMuted: boolean;
   isArchived: boolean;
   isBlocked: boolean;
+  isHidden?: boolean;
   vanishMode?: boolean;
   customEmoji?: string[];
   theme?: string;
@@ -102,4 +103,14 @@ export interface Call {
   duration?: number;
 }
 
-export type Screen = 'auth' | 'chats' | 'chat' | 'calls' | 'stories' | 'settings' | 'profile' | 'call-active' | 'friends';
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'sent' | 'accepted' | 'rejected';
+  createdAt: Date;
+  sender?: User;
+  receiver?: User;
+}
+
+export type Screen = 'auth' | 'chats' | 'chat' | 'calls' | 'stories' | 'settings' | 'profile' | 'call-active' | 'friends' | 'setup-username';
