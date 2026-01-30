@@ -3,25 +3,84 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Plus, X, User, Lock, Bell, Palette, Globe,
   Moon, Shield, HelpCircle, Info, Star, Archive, MessageSquare,
-  Eye, Camera, CheckCircle, Volume2, Vibrate, Download, Trash2,
-  Database, Wifi, Smartphone, Monitor, Key, UserCheck, UserX,
+  Eye, EyeOff, Camera, CheckCircle, Volume2, Vibrate, Download, Trash2,
+  Database, Wifi, Smartphone, Monitor, UserCheck, UserX,
   MessageCircle, Image, Video, FileText, PhoneCall,
   Clock, Languages, Type, Zap, Heart,
-  Share2, LogOut, ChevronRight, Phone
+  Share2, LogOut, ChevronRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDistanceToNow } from 'date-fns';
 
 // Stories Screen
 export const StoriesScreen: React.FC = () => {
-  const { currentUser, users, stories, setCurrentScreen, addStory } = useApp();
+  const { currentUser, users, stories, setCurrentScreen, addStory, deleteStory, friends } = useApp();
   const [viewingStory, setViewingStory] = useState<string | null>(null);
   const [storyIndex, setStoryIndex] = useState(0);
   const [showAddStory, setShowAddStory] = useState(false);
   const [storyText, setStoryText] = useState('');
   const [storyMediaPreview, setStoryMediaPreview] = useState<string | null>(null);
+  const [_storyMediaFile, _setStoryMediaFile] = useState<File | null>(null);
   const [storyType, setStoryType] = useState<'text' | 'image' | 'video'>('text');
   const [isUploading, setIsUploading] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [storyComments, setStoryComments] = useState<{[key: string]: Array<{id: string, oderId: string, username: string, text: string, createdAt: number}>}>({});
+
+  // Filter stories - only show from friends + own stories
+  const friendIds = friends?.map((f: { oderId: string }) => f.oderId) || [];
+  const visibleStories = stories.filter(s => 
+    s.userId === currentUser?.id || friendIds.includes(s.userId)
+  );
+
+  // Group stories by user
+  // Use filtered stories for display
+  const storyUsersToShow = users.filter(u => visibleStories.some(s => s.userId === u.id));
+
+  // Add comment to story
+  const handleAddComment = () => {
+    if (!commentText.trim() || !currentStory) return;
+    
+    const newComment = {
+      id: Date.now().toString(),
+      oderId: currentUser?.id || '',
+      username: currentUser?.username || '',
+      text: commentText.trim(),
+      createdAt: Date.now()
+    };
+    
+    setStoryComments(prev => ({
+      ...prev,
+      [currentStory.id]: [...(prev[currentStory.id] || []), newComment]
+    }));
+    
+    setCommentText('');
+    setShowComments(false);
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+  };
+
+  // Delete story (only owner can delete)
+  const handleDeleteStory = async () => {
+    if (!currentStory || currentStory.userId !== currentUser?.id) return;
+    
+    if (confirm('Delete this story?')) {
+      try {
+        await deleteStory(currentStory.id);
+        nextStory();
+        
+        if ('vibrate' in navigator) {
+          navigator.vibrate([10, 50, 10]);
+        }
+      } catch (error) {
+        console.error('Failed to delete story:', error);
+        alert('Failed to delete story');
+      }
+    }
+  };
 
   const userStories = viewingStory 
     ? stories.filter(s => s.userId === viewingStory)
@@ -82,8 +141,7 @@ export const StoriesScreen: React.FC = () => {
 
         {/* Story Content */}
         <div
-          onClick={nextStory}
-          className="h-full flex items-center justify-center cursor-pointer"
+          className="h-full flex items-center justify-center"
           style={{
             background: currentStory.type === 'text' 
               ? currentStory.backgroundColor || '#8B5CF6'
@@ -91,20 +149,112 @@ export const StoriesScreen: React.FC = () => {
           }}
         >
           {currentStory.type === 'text' ? (
-            <p className="text-3xl font-bold text-center px-8">{currentStory.content}</p>
+            <div onClick={nextStory} className="cursor-pointer w-full h-full flex items-center justify-center">
+              <p className="text-3xl font-bold text-center px-8">{currentStory.content}</p>
+            </div>
+          ) : currentStory.type === 'video' ? (
+            <div className="relative w-full h-full flex items-center justify-center">
+              <video
+                src={currentStory.content}
+                className="max-h-full max-w-full object-contain"
+                autoPlay
+                playsInline
+                muted={false}
+                controls
+                onEnded={nextStory}
+                onError={(e) => {
+                  console.error('Video error:', e);
+                }}
+              />
+              {/* Skip button for video */}
+              <button
+                onClick={nextStory}
+                className="absolute bottom-20 right-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-medium hover:bg-white/30 transition-colors"
+              >
+                Skip →
+              </button>
+            </div>
           ) : (
-            <img
-              src={currentStory.content}
-              alt="Story"
-              className="max-h-full max-w-full object-contain"
-            />
+            <div onClick={nextStory} className="cursor-pointer w-full h-full flex items-center justify-center">
+              <img
+                src={currentStory.content}
+                alt="Story"
+                className="max-h-full max-w-full object-contain"
+                onError={(e) => {
+                  console.error('Image error:', e);
+                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x600?text=Image+Error';
+                }}
+              />
+            </div>
           )}
         </div>
 
-        {/* Views */}
-        <div className="absolute bottom-4 left-4 flex items-center gap-2 text-white/70">
-          <Eye className="w-4 h-4" />
-          <span className="text-sm">{currentStory.views.length} views</span>
+        {/* Bottom Bar - Views, Comments, Delete */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+          {/* Comment Input */}
+          {showComments && (
+            <div className="mb-4 bg-white/10 backdrop-blur-sm rounded-2xl p-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Write a comment..."
+                  className="flex-1 bg-white/20 rounded-full px-4 py-2 text-white placeholder-white/50 focus:outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
+                />
+                <button
+                  onClick={handleAddComment}
+                  disabled={!commentText.trim()}
+                  className="px-4 py-2 bg-violet-600 text-white rounded-full font-medium disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+              {/* Show comments for this story */}
+              {storyComments[currentStory.id]?.length > 0 && (
+                <div className="mt-3 max-h-32 overflow-y-auto space-y-2">
+                  {storyComments[currentStory.id].map((comment) => (
+                    <div key={comment.id} className="text-sm">
+                      <span className="font-semibold text-white">@{comment.username}</span>
+                      <span className="text-white/80 ml-2">{comment.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-white/70">
+                <Eye className="w-4 h-4" />
+                <span className="text-sm">{currentStory.views.length} views</span>
+              </div>
+              
+              {/* Comment button */}
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-sm">
+                  {storyComments[currentStory.id]?.length || 0} comments
+                </span>
+              </button>
+            </div>
+
+            {/* Delete button - only for owner */}
+            {currentStory.userId === currentUser?.id && (
+              <button
+                onClick={handleDeleteStory}
+                className="flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="text-sm">Delete</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -260,8 +410,8 @@ export const StoriesScreen: React.FC = () => {
             <span className="font-semibold">Add Story</span>
           </motion.button>
 
-          {/* Story Thumbnails */}
-          {users.filter(u => stories.some(s => s.userId === u.id)).map(user => {
+          {/* Story Thumbnails - only show stories from friends */}
+          {storyUsersToShow.map(user => {
             const userStoryList = stories.filter(s => s.userId === user.id);
             const latestStory = userStoryList[0];
             const hasViewed = userStoryList.every(s => s.views.includes(currentUser?.id || ''));
@@ -277,17 +427,36 @@ export const StoriesScreen: React.FC = () => {
                 {latestStory.type === 'text' ? (
                   <div
                     className="w-full h-full flex items-center justify-center p-4"
-                    style={{ background: latestStory.backgroundColor }}
+                    style={{ background: latestStory.backgroundColor || '#8B5CF6' }}
                   >
                     <p className="text-white text-lg font-semibold text-center line-clamp-4">
                       {latestStory.content}
                     </p>
+                  </div>
+                ) : latestStory.type === 'video' ? (
+                  <div className="w-full h-full relative bg-black flex items-center justify-center">
+                    <video
+                      src={latestStory.content}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                    {/* Video indicator */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center">
+                        <Video className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <img
                     src={latestStory.content}
                     alt="Story"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x400?text=Image';
+                    }}
                   />
                 )}
                 
@@ -358,8 +527,6 @@ export const SettingsScreen: React.FC = () => {
       title: 'Account',
       items: [
         { icon: User, label: 'Edit Profile', screen: 'profile', type: 'navigation' },
-        { icon: Key, label: 'Change Password', type: 'action' },
-        { icon: Phone, label: 'Change Phone Number', type: 'action' },
         { icon: Share2, label: 'Invite Friends', type: 'action' },
         { icon: LogOut, label: 'Logout', action: logout, type: 'action', danger: true },
       ],
@@ -374,8 +541,8 @@ export const SettingsScreen: React.FC = () => {
         { icon: Type, label: 'Typing Indicators', value: settings.typingIndicators, key: 'typingIndicators', type: 'toggle' },
         { icon: UserCheck, label: 'Show Online Status', value: settings.onlineStatus, key: 'onlineStatus', type: 'toggle' },
         { icon: UserX, label: 'Blocked Contacts', type: 'navigation' },
-        { icon: Shield, label: 'Two-Factor Authentication', type: 'navigation' },
         { icon: Lock, label: 'App Lock', type: 'navigation' },
+        { icon: EyeOff, label: 'Hidden Chats', type: 'navigation' },
       ],
     },
     {
@@ -417,15 +584,7 @@ export const SettingsScreen: React.FC = () => {
         { icon: Trash2, label: 'Clear Cache', type: 'action' },
       ],
     },
-    {
-      title: 'Backup',
-      items: [
-        { icon: Database, label: 'Backup Frequency', value: settings.backupFrequency, type: 'select' },
-        { icon: Video, label: 'Include Videos', value: settings.includeVideos, key: 'includeVideos', type: 'toggle' },
-        { icon: Download, label: 'Backup Now', type: 'action' },
-        { icon: Clock, label: 'Last Backup', type: 'info', value: 'Today at 2:30 AM' },
-      ],
-    },
+    // Backup section removed
     {
       title: 'Appearance',
       items: [

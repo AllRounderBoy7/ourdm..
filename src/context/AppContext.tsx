@@ -2,6 +2,12 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, Chat, Message, Story, Call, Screen } from '../types';
 import { supabase } from '../lib/supabase';
 
+interface Friend {
+  oderId: string;
+  odername: string;
+  avatar: string;
+}
+
 interface AppContextType {
   currentUser: User | null;
   users: User[];
@@ -15,6 +21,7 @@ interface AppContextType {
   typingUsers: { [chatId: string]: string[] };
   onlineUsers: Set<string>;
   loading: boolean;
+  friends: Friend[];
   
   login: (email: string) => void;
   logout: () => void;
@@ -31,6 +38,7 @@ interface AppContextType {
   startCall: (chatId: string, type: 'video' | 'audio') => void;
   endCall: () => void;
   addStory: (content: string, type: Story['type']) => void;
+  deleteStory: (storyId: string) => Promise<void>;
   setTyping: (chatId: string, isTyping: boolean) => void;
   createGroup: (name: string, participantIds: string[]) => void;
   searchMessages: (query: string) => Message[];
@@ -58,6 +66,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [typingUsers, setTypingUsers] = useState<{ [chatId: string]: string[] }>({});
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [friends, setFriends] = useState<Friend[]>([]);
 
   // Request permissions on app load
   useEffect(() => {
@@ -148,6 +157,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           loadChats(userId),
           loadStories(),
           loadCalls(userId),
+          loadFriends(userId),
         ]);
 
         // Subscribe to realtime updates
@@ -828,6 +838,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const deleteStory = async (storyId: string) => {
+    if (!currentUser) return;
+
+    try {
+      const { error } = await supabase
+        .from('stories')
+        .delete()
+        .eq('id', storyId)
+        .eq('user_id', currentUser.id);
+
+      if (error) throw error;
+
+      setStories(prev => prev.filter(s => s.id !== storyId));
+    } catch (error) {
+      console.error('Error deleting story:', error);
+      throw error;
+    }
+  };
+
+  // Load friends
+  const loadFriends = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('friendships')
+        .select(`
+          id,
+          user_id,
+          friend_id,
+          status,
+          profiles!friendships_friend_id_fkey (
+            id,
+            username,
+            avatar_url
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
+
+      if (error) throw error;
+
+      const loadedFriends: Friend[] = (data || []).map((f: any) => ({
+        oderId: f.profiles?.id || f.friend_id,
+        odername: f.profiles?.username || 'Unknown',
+        avatar: f.profiles?.avatar_url || `https://ui-avatars.com/api/?name=User&background=random`,
+      }));
+
+      setFriends(loadedFriends);
+    } catch (error) {
+      console.error('Error loading friends:', error);
+    }
+  };
+
   const setTyping = (chatId: string, isTyping: boolean) => {
     if (!currentUser) return;
 
@@ -1078,6 +1140,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     typingUsers,
     onlineUsers,
     loading,
+    friends,
     login,
     logout,
     setCurrentScreen,
@@ -1093,6 +1156,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     startCall,
     endCall,
     addStory,
+    deleteStory,
     setTyping,
     createGroup,
     searchMessages,

@@ -6,10 +6,11 @@ import { ChatWindow } from './components/ChatWindow';
 import { CallsScreen } from './components/CallsScreen';
 import { ActiveCallScreen } from './components/ActiveCallScreen';
 import { FriendsScreen } from './components/FriendsScreen';
-import { StoriesScreen, SettingsScreen, ProfileScreen } from './components/AllScreens';
+import { StoriesScreen, ProfileScreen } from './components/AllScreens';
+import SettingsScreenNew from './components/SettingsScreenNew';
 
 const AppContent: React.FC = () => {
-  const { currentScreen, currentUser } = useApp();
+  const { currentScreen, currentUser, setCurrentScreen, logout } = useApp();
 
   return (
     <div className="max-w-md mx-auto shadow-2xl h-screen overflow-hidden bg-white relative">
@@ -20,7 +21,13 @@ const AppContent: React.FC = () => {
       {currentScreen === 'call-active' && <ActiveCallScreen />}
       {currentScreen === 'friends' && <FriendsScreen />}
       {currentScreen === 'stories' && <StoriesScreen />}
-      {currentScreen === 'settings' && <SettingsScreen />}
+      {currentScreen === 'settings' && (
+        <SettingsScreenNew 
+          onBack={() => setCurrentScreen('chats')} 
+          onLogout={logout}
+          currentUser={currentUser}
+        />
+      )}
       {currentScreen === 'profile' && <ProfileScreen />}
       
       {/* Footer - Made by Sameer Shah */}
