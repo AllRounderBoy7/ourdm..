@@ -52,7 +52,7 @@ export const AuthScreen: React.FC = () => {
             <MessageCircle className="w-10 h-10 text-violet-600" />
           </motion.div>
           <h1 className="text-5xl font-bold text-white mb-2">OurDM</h1>
-          <p className="text-violet-100 text-lg">Ultimate Real-time Chat & Calling</p>
+          <p className="text-violet-100 text-lg">Connect, Chat & Call Instantly</p>
         </div>
 
         {/* Auth Card */}
@@ -164,10 +164,10 @@ export const AuthScreen: React.FC = () => {
             </motion.form>
           )}
 
-          {/* Demo Info */}
+          {/* App Info */}
           <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10">
             <p className="text-white/70 text-xs text-center">
-              Demo Mode: Click "Continue with Google" to explore all features
+              🔒 Secure authentication powered by Supabase
             </p>
           </div>
         </motion.div>
@@ -180,7 +180,7 @@ export const AuthScreen: React.FC = () => {
           className="mt-8 grid grid-cols-3 gap-4 text-center"
         >
           <div>
-            <div className="text-white font-bold text-2xl">40+</div>
+            <div className="text-white font-bold text-2xl">50+</div>
             <div className="text-violet-200 text-sm">Features</div>
           </div>
           <div>
@@ -191,6 +191,18 @@ export const AuthScreen: React.FC = () => {
             <div className="text-white font-bold text-2xl">HD</div>
             <div className="text-violet-200 text-sm">Calls</div>
           </div>
+        </motion.div>
+
+        {/* Footer - Made by Sameer Shah */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="mt-8 text-center"
+        >
+          <p className="text-xs text-white/50">
+            Made with ❤️ by <span className="font-semibold text-white/70">Sameer Shah</span>
+          </p>
         </motion.div>
       </motion.div>
     </div>

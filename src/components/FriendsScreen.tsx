@@ -14,11 +14,8 @@ export const FriendsScreen: React.FC = () => {
   const { users, currentUser, setCurrentScreen } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add'>('friends');
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([
-    { id: 'req-1', userId: 'user-6', status: 'pending', timestamp: new Date(Date.now() - 3600000) },
-    { id: 'req-2', userId: 'user-7', status: 'pending', timestamp: new Date(Date.now() - 7200000) },
-  ]);
-  const [friends] = useState<string[]>(['user-2', 'user-3', 'user-4', 'user-5']);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friends] = useState<string[]>([]);
 
   const filteredUsers = users.filter(u => 
     u.id !== currentUser?.id && 

@@ -40,6 +40,7 @@ interface AppContextType {
   acceptFriendRequest: (requestId: string) => Promise<void>;
   rejectFriendRequest: (requestId: string) => Promise<void>;
   searchUsers: (query: string) => Promise<User[]>;
+  updateUserProfile: (updates: { name?: string; bio?: string; avatar?: string }) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -58,11 +59,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
+  // Request permissions on app load
+  useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        // Request microphone permission
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Request camera permission
+        await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        console.log('Permissions granted!');
+      } catch (error) {
+        console.log('Permission denied:', error);
+      }
+    };
+
+    if (currentUser) {
+      requestPermissions();
+    }
+  }, [currentUser]);
+
   // Initialize auth state
   useEffect(() => {
     checkUser();
     
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         await loadUserProfile(session.user.id);
       } else {
@@ -357,7 +379,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const loadCalls = async (userId: string) => {
+  const loadCalls = async (_userId: string) => {
     try {
       const { data, error } = await supabase
         .from('calls')
@@ -365,7 +387,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           *,
           call_participants (user_id)
         `)
-        .contains('call_participants', [{ user_id: userId }])
         .order('started_at', { ascending: false })
         .limit(50);
 
@@ -388,7 +409,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const subscribeToRealtimeUpdates = (userId: string) => {
+  const subscribeToRealtimeUpdates = (_userId: string) => {
     // Subscribe to new messages
     const messagesSubscription = supabase
       .channel('messages')
@@ -439,7 +460,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   };
 
-  const login = async (email: string) => {
+  const login = async (_email: string) => {
     // This is handled by Supabase auth
   };
 
@@ -1004,6 +1025,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const updateUserProfile = async (updates: { name?: string; bio?: string; avatar?: string }) => {
+    if (!currentUser) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: updates.name,
+          bio: updates.bio,
+          avatar_url: updates.avatar,
+        })
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setCurrentUser(prev => prev ? {
+        ...prev,
+        fullName: updates.name || prev.fullName,
+        bio: updates.bio || prev.bio,
+        avatar: updates.avatar || prev.avatar,
+      } : null);
+
+      // Update users list
+      setUsers(prev => prev.map(user =>
+        user.id === currentUser.id
+          ? {
+              ...user,
+              fullName: updates.name || user.fullName,
+              bio: updates.bio || user.bio,
+              avatar: updates.avatar || user.avatar,
+            }
+          : user
+      ));
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    }
+  };
+
   const value: AppContextType = {
     currentUser,
     users,
@@ -1041,6 +1102,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     acceptFriendRequest,
     rejectFriendRequest,
     searchUsers,
+    updateUserProfile,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

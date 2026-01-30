@@ -20,7 +20,8 @@ export interface Message {
   content: string;
   type: 'text' | 'image' | 'video' | 'audio' | 'file' | 'voice' | 'location' | 'contact' | 'poll' | 'sticker';
   timestamp: Date;
-  status: 'sent' | 'delivered' | 'read';
+  createdAt?: string;
+  status: 'sending' | 'sent' | 'delivered' | 'read';
   replyTo?: string;
   reactions?: Reaction[];
   edited?: boolean;
@@ -33,6 +34,8 @@ export interface Message {
   duration?: number;
   location?: { lat: number; lng: number };
   poll?: Poll;
+  readBy?: string[];
+  deliveredTo?: string[];
 }
 
 export interface Reaction {

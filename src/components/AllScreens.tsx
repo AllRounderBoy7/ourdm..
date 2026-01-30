@@ -14,9 +14,14 @@ import { formatDistanceToNow } from 'date-fns';
 
 // Stories Screen
 export const StoriesScreen: React.FC = () => {
-  const { currentUser, users, stories, setCurrentScreen } = useApp();
+  const { currentUser, users, stories, setCurrentScreen, addStory } = useApp();
   const [viewingStory, setViewingStory] = useState<string | null>(null);
   const [storyIndex, setStoryIndex] = useState(0);
+  const [showAddStory, setShowAddStory] = useState(false);
+  const [storyText, setStoryText] = useState('');
+  const [storyMediaPreview, setStoryMediaPreview] = useState<string | null>(null);
+  const [storyType, setStoryType] = useState<'text' | 'image' | 'video'>('text');
+  const [isUploading, setIsUploading] = useState(false);
 
   const userStories = viewingStory 
     ? stories.filter(s => s.userId === viewingStory)
@@ -105,6 +110,134 @@ export const StoriesScreen: React.FC = () => {
     );
   }
 
+  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setStoryMediaPreview(event.target?.result as string);
+        setStoryType(file.type.startsWith('video/') ? 'video' : 'image');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePostStory = async () => {
+    setIsUploading(true);
+    try {
+      const content = storyType === 'text' ? storyText : storyMediaPreview || '';
+      await addStory(content, storyType);
+      
+      // Reset form
+      setShowAddStory(false);
+      setStoryText('');
+      setStoryMediaPreview(null);
+      setStoryType('text');
+      
+      // Haptic feedback
+      if ('vibrate' in navigator) {
+        navigator.vibrate([10, 50, 10]);
+      }
+    } catch (error) {
+      console.error('Failed to post story:', error);
+      alert('Failed to post story. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Add Story Modal
+  if (showAddStory) {
+    return (
+      <div className="h-screen flex flex-col bg-gradient-to-br from-violet-600 to-purple-600">
+        <div className="px-4 py-4 flex items-center justify-between text-white">
+          <button onClick={() => setShowAddStory(false)}>
+            <X className="w-6 h-6" />
+          </button>
+          <h1 className="text-xl font-bold">Create Story</h1>
+          <button
+            onClick={handlePostStory}
+            disabled={isUploading || (!storyText && !storyMediaPreview)}
+            className="px-4 py-2 bg-white text-violet-600 rounded-full font-semibold disabled:opacity-50"
+          >
+            {isUploading ? 'Posting...' : 'Post'}
+          </button>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          {storyMediaPreview ? (
+            <div className="relative w-full max-w-md">
+              {storyType === 'video' ? (
+                <video
+                  src={storyMediaPreview}
+                  className="w-full rounded-2xl max-h-[60vh] object-contain"
+                  controls
+                  autoPlay
+                  muted
+                />
+              ) : (
+                <img
+                  src={storyMediaPreview}
+                  alt="Preview"
+                  className="w-full rounded-2xl max-h-[60vh] object-contain"
+                />
+              )}
+              <button
+                onClick={() => {
+                  setStoryMediaPreview(null);
+                  setStoryType('text');
+                }}
+                className="absolute top-2 right-2 p-2 bg-black/50 rounded-full"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          ) : (
+            <textarea
+              value={storyText}
+              onChange={(e) => setStoryText(e.target.value)}
+              placeholder="What's on your mind?"
+              className="w-full max-w-md h-64 bg-white/20 backdrop-blur-sm border-2 border-white/50 rounded-2xl p-6 text-white text-2xl placeholder-white/70 focus:outline-none focus:ring-4 focus:ring-white/50 resize-none"
+            />
+          )}
+        </div>
+
+        <div className="p-4 flex gap-3 justify-center">
+          <label className="flex flex-col items-center gap-2 bg-white/20 backdrop-blur-sm rounded-2xl p-4 cursor-pointer hover:bg-white/30 transition-colors">
+            <Image className="w-8 h-8 text-white" />
+            <span className="text-white text-sm font-medium">Photo</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleMediaSelect}
+              className="hidden"
+            />
+          </label>
+          <label className="flex flex-col items-center gap-2 bg-white/20 backdrop-blur-sm rounded-2xl p-4 cursor-pointer hover:bg-white/30 transition-colors">
+            <Video className="w-8 h-8 text-white" />
+            <span className="text-white text-sm font-medium">Video</span>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={handleMediaSelect}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={() => {
+              setStoryType('text');
+              setStoryMediaPreview(null);
+            }}
+            className="flex flex-col items-center gap-2 bg-white/20 backdrop-blur-sm rounded-2xl p-4 hover:bg-white/30 transition-colors"
+          >
+            <Type className="w-8 h-8 text-white" />
+            <span className="text-white text-sm font-medium">Text</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-white">
       <div className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-4 py-4 flex items-center gap-3">
@@ -120,6 +253,7 @@ export const StoriesScreen: React.FC = () => {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            onClick={() => setShowAddStory(true)}
             className="aspect-[3/4] bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex flex-col items-center justify-center gap-3 text-white shadow-lg"
           >
             <Plus className="w-12 h-12" />
@@ -404,10 +538,48 @@ export const SettingsScreen: React.FC = () => {
 
 // Profile Screen
 export const ProfileScreen: React.FC = () => {
-  const { currentUser, setCurrentScreen } = useApp();
+  const { currentUser, setCurrentScreen, updateUserProfile } = useApp();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser?.name || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
+  const [avatar, setAvatar] = useState(currentUser?.avatar || '');
+  const [uploading, setUploading] = useState(false);
+
+  const handleSave = async () => {
+    if (!currentUser) return;
+    
+    setUploading(true);
+    try {
+      await updateUserProfile({
+        name: name.trim(),
+        bio: bio.trim(),
+        avatar: avatar,
+      });
+      setIsEditing(false);
+      
+      // Haptic feedback
+      if ('vibrate' in navigator) {
+        navigator.vibrate([10, 50, 10]);
+      }
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Preview the image
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setAvatar(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -419,10 +591,17 @@ export const ProfileScreen: React.FC = () => {
           <h1 className="text-2xl font-bold">Profile</h1>
         </div>
         <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="text-sm font-semibold"
+          onClick={() => {
+            if (isEditing) {
+              handleSave();
+            } else {
+              setIsEditing(true);
+            }
+          }}
+          disabled={uploading}
+          className="text-sm font-semibold hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
         >
-          {isEditing ? 'Save' : 'Edit'}
+          {uploading ? 'Saving...' : isEditing ? 'Save' : 'Edit'}
         </button>
       </div>
 
@@ -431,26 +610,43 @@ export const ProfileScreen: React.FC = () => {
         <div className="bg-white p-8 flex flex-col items-center gap-4 mb-6">
           <div className="relative">
             <img
-              src={currentUser?.avatar}
-              alt={currentUser?.name}
-              className="w-32 h-32 rounded-full border-4 border-violet-500 shadow-xl"
+              src={avatar}
+              alt={name}
+              className="w-32 h-32 rounded-full border-4 border-violet-500 shadow-xl object-cover"
             />
             {isEditing && (
-              <button className="absolute bottom-0 right-0 p-3 bg-violet-600 text-white rounded-full shadow-lg">
+              <label className="absolute bottom-0 right-0 p-3 bg-violet-600 text-white rounded-full shadow-lg cursor-pointer hover:bg-violet-700 active:scale-95 transition-all">
                 <Camera className="w-5 h-5" />
-              </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </label>
             )}
           </div>
           {isEditing ? (
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="text-2xl font-bold text-center border-b-2 border-violet-600 focus:outline-none px-4 py-2"
+              className="text-2xl font-bold text-center border-b-2 border-violet-600 focus:outline-none px-4 py-2 w-full max-w-xs"
+              placeholder="Your name"
             />
           ) : (
-            <h2 className="text-2xl font-bold">{currentUser?.name}</h2>
+            <h2 className="text-2xl font-bold">{name}</h2>
           )}
           <p className="text-violet-600 font-semibold">@{currentUser?.username}</p>
+          {!isEditing && (
+            <div className={`flex items-center gap-1 text-sm ${
+              currentUser?.status === 'online' ? 'text-green-600' : 'text-gray-400'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                currentUser?.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+              }`}></div>
+              {currentUser?.status === 'online' ? 'Online' : 'Offline'}
+            </div>
+          )}
         </div>
 
         {/* Info Section */}
@@ -465,27 +661,49 @@ export const ProfileScreen: React.FC = () => {
               placeholder="Write something about yourself..."
             />
           ) : (
-            <p className="text-gray-700">{currentUser?.bio || 'No bio yet'}</p>
+            <p className="text-gray-700">{bio || 'No bio yet'}</p>
           )}
         </div>
 
         {/* Stats */}
-        <div className="bg-white p-4">
+        <div className="bg-white p-4 mb-6">
+          <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Statistics</h3>
           <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
+            <div className="p-3 bg-gradient-to-br from-violet-50 to-purple-50 rounded-xl">
               <div className="text-2xl font-bold text-violet-600">147</div>
               <div className="text-sm text-gray-500">Messages</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold text-violet-600">23</div>
+            <div className="p-3 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl">
+              <div className="text-2xl font-bold text-blue-600">23</div>
               <div className="text-sm text-gray-500">Calls</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold text-violet-600">8</div>
+            <div className="p-3 bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl">
+              <div className="text-2xl font-bold text-pink-600">8</div>
               <div className="text-sm text-gray-500">Stories</div>
             </div>
           </div>
         </div>
+
+        {/* Additional Info */}
+        {!isEditing && (
+          <div className="bg-white p-4">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Account Info</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-gray-600">Email</span>
+                <span className="text-gray-900 font-medium">{currentUser?.email}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-gray-600">Username</span>
+                <span className="text-violet-600 font-medium">@{currentUser?.username}</span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-gray-600">Joined</span>
+                <span className="text-gray-900 font-medium">January 2024</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

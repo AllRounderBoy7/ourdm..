@@ -219,7 +219,7 @@ export const ChatsList: React.FC = () => {
                       className="w-full h-full rounded-full border-2 border-white"
                     />
                   </div>
-                  <span className="text-xs text-gray-600 max-w-[64px] truncate">{user.name.split(' ')[0]}</span>
+                  <span className="text-xs text-gray-600 max-w-[64px] truncate">{(user.username || user.fullName || 'User').split(' ')[0]}</span>
                 </button>
               );
             })}
