@@ -8,6 +8,24 @@ interface Friend {
   avatar: string;
 }
 
+interface FriendRequest {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  sender?: {
+    id: string;
+    username: string;
+    avatar_url: string;
+  };
+  receiver?: {
+    id: string;
+    username: string;
+    avatar_url: string;
+  };
+}
+
 interface AppContextType {
   currentUser: User | null;
   users: User[];
@@ -22,6 +40,7 @@ interface AppContextType {
   onlineUsers: Set<string>;
   loading: boolean;
   friends: Friend[];
+  friendRequests: FriendRequest[];
   
   login: (email: string) => void;
   logout: () => void;
@@ -67,6 +86,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
   // Request permissions on app load
   useEffect(() => {
@@ -158,6 +178,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           loadStories(),
           loadCalls(userId),
           loadFriends(userId),
+          loadFriendRequests(userId),
         ]);
 
         // Subscribe to realtime updates
@@ -890,6 +911,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // Load friend requests
+  const loadFriendRequests = async (userId: string) => {
+    try {
+      // Get requests where I am the sender OR receiver
+      const { data, error } = await supabase
+        .from('friendships')
+        .select(`
+          id,
+          user_id,
+          friend_id,
+          status,
+          created_at,
+          sender:profiles!friendships_user_id_fkey (
+            id,
+            username,
+            avatar_url
+          ),
+          receiver:profiles!friendships_friend_id_fkey (
+            id,
+            username,
+            avatar_url
+          )
+        `)
+        .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+
+      const formattedRequests: FriendRequest[] = (data || []).map((req: any) => ({
+        id: req.id,
+        user_id: req.user_id,
+        friend_id: req.friend_id,
+        status: req.status,
+        created_at: req.created_at,
+        sender: Array.isArray(req.sender) && req.sender.length > 0 ? req.sender[0] : req.sender,
+        receiver: Array.isArray(req.receiver) && req.receiver.length > 0 ? req.receiver[0] : req.receiver,
+      }));
+
+      setFriendRequests(formattedRequests);
+    } catch (error) {
+      console.error('Error loading friend requests:', error);
+    }
+  };
+
   const setTyping = (chatId: string, isTyping: boolean) => {
     if (!currentUser) return;
 
@@ -1023,6 +1088,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (error) throw error;
 
+      // Reload friend requests
+      await loadFriendRequests(currentUser.id);
+      
       alert('Friend request sent!');
     } catch (error: any) {
       console.error('Error sending friend request:', error);
@@ -1033,28 +1101,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const acceptFriendRequest = async (requestId: string) => {
+    if (!currentUser) return;
+
     try {
       await supabase
         .from('friendships')
         .update({ status: 'accepted' })
         .eq('id', requestId);
 
-      // Reload users/friends
-      await loadUsers();
+      // Reload users/friends/requests
+      await Promise.all([
+        loadUsers(),
+        loadFriends(currentUser.id),
+        loadFriendRequests(currentUser.id),
+      ]);
     } catch (error) {
       console.error('Error accepting friend request:', error);
     }
   };
 
   const rejectFriendRequest = async (requestId: string) => {
+    if (!currentUser) return;
+
     try {
       await supabase
         .from('friendships')
         .delete()
         .eq('id', requestId);
 
-      // Reload users/friends
-      await loadUsers();
+      // Reload users/friends/requests
+      await loadFriendRequests(currentUser.id);
     } catch (error) {
       console.error('Error rejecting friend request:', error);
     }
@@ -1141,6 +1217,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     onlineUsers,
     loading,
     friends,
+    friendRequests,
     login,
     logout,
     setCurrentScreen,
